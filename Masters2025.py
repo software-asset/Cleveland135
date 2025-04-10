@@ -1,3 +1,4 @@
+from io import StringIO
 import streamlit as st
 import pandas as pd
 import seaborn as sns
@@ -117,7 +118,7 @@ Team9,Justin Rose,Tier 6
 """
 
 # Prepare data
-df = pd.read_csv(pd.compat.StringIO(data))
+df = pd.read_csv(StringIO(data))
 df['Team Name'] = df['Team Name'].str.strip().str.upper()
 
 st.title("🏌️ Golf Pool Dashboard")
