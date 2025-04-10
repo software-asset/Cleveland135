@@ -120,31 +120,77 @@ df = pd.read_csv(StringIO(data))
 df['Team Name'] = df['Team Name'].str.strip().str.upper()
 
 st.title("🏌️ Golf Pool Simulator Dashboard")
-st.markdown("Simulate outcomes by assigning points to each player, and see how team standings would change.")
+st.markdown("Simulate outcomes, compare teams, and explore live pool analytics.")
 
-# Sidebar: Player scoring input
-st.sidebar.header("🧮 Player Scoring")
+# Sidebar scoring templates
+scoring_template = st.sidebar.selectbox("Choose a scoring model", ["Manual Input", "Top 10 Bonus", "Cut Penalty", "Flat Points"])
+
 unique_players = sorted(df['Selection'].unique())
 player_scores = {}
 
-for player in unique_players:
-    player_scores[player] = st.sidebar.number_input(f"{player}", min_value=0, max_value=100, value=0, step=1)
+if scoring_template == "Manual Input":
+    st.sidebar.header("🧮 Player Scoring")
+    for player in unique_players:
+        player_scores[player] = st.sidebar.number_input(f"{player}", min_value=0, max_value=100, value=0, step=1)
+elif scoring_template == "Top 10 Bonus":
+    top_10 = st.sidebar.multiselect("Select Top 10 Finishers", unique_players)
+    for player in unique_players:
+        player_scores[player] = 20 if player in top_10 else 5
+elif scoring_template == "Cut Penalty":
+    made_cut = st.sidebar.multiselect("Select Players Who Made The Cut", unique_players)
+    for player in unique_players:
+        player_scores[player] = 15 if player in made_cut else 0
+elif scoring_template == "Flat Points":
+    for player in unique_players:
+        player_scores[player] = 10
 
-# Apply scores to the main dataframe
+# Apply scores
 df['Score'] = df['Selection'].map(player_scores)
 
-# Calculate team total scores
+# Team total scores
 team_scores = df.groupby('Team Name')['Score'].sum().reset_index()
 team_scores = team_scores.sort_values(by='Score', ascending=False).reset_index(drop=True)
-team_scores.index += 1  # start ranking from 1
+team_scores.index += 1
 
-# Display leaderboard
+# Leaderboard
 st.header("🏆 Simulated Team Leaderboard")
 st.table(team_scores.rename(columns={"Score": "Total Points"}))
 
-# Optionally: Show individual team picks and scores
-selected_team = st.selectbox("Select a team to view details", sorted(df['Team Name'].unique()))
-team_detail = df[df['Team Name'] == selected_team].sort_values('Tier')
+# What-if scenario
+st.header("🔮 What-If Scenario Simulator")
+sim_player = st.selectbox("Pick a player to simulate a different outcome", unique_players)
+sim_score = st.slider(f"Assign a new score to {sim_player}", 0, 100, player_scores[sim_player])
+sim_df = df.copy()
+sim_df.loc[sim_df['Selection'] == sim_player, 'Score'] = sim_score
+sim_results = sim_df.groupby('Team Name')['Score'].sum().reset_index().sort_values(by='Score', ascending=False).reset_index(drop=True)
+sim_results.index += 1
+st.subheader(f"Leaderboard with {sim_player} scoring {sim_score} pts")
+st.table(sim_results.rename(columns={"Score": "Total Points"}))
 
+# Team comparison tool
+st.header("📊 Team Comparison Tool")
+team1 = st.selectbox("Compare Team 1", sorted(df['Team Name'].unique()), key="comp1")
+team2 = st.selectbox("Compare Team 2", sorted(df['Team Name'].unique()), key="comp2")
+t1 = df[df['Team Name'] == team1].sort_values('Tier')
+t2 = df[df['Team Name'] == team2].sort_values('Tier')
+st.subheader(f"{team1} Picks vs {team2}")
+st.columns(2)[0].table(t1[['Tier', 'Selection', 'Score']].reset_index(drop=True))
+st.columns(2)[1].table(t2[['Tier', 'Selection', 'Score']].reset_index(drop=True))
+
+# Pick popularity heatmap
+st.header("🔥 Player Pick Popularity Heatmap")
+pivot = pd.pivot_table(df, index='Selection', columns='Tier', aggfunc='size', fill_value=0)
+fig, ax = plt.subplots(figsize=(12, 14))
+sns.heatmap(pivot, cmap="RdYlGn_r", annot=True, fmt='d', linewidths=0.5, ax=ax)
+ax.set_title("Heatmap of Player Picks per Tier")
+st.pyplot(fig)
+
+# Download CSV
+st.download_button("📥 Download Leaderboard as CSV", team_scores.rename(columns={"Score": "Total Points"}).to_csv(index=False), file_name="leaderboard.csv")
+
+# Team viewer
+st.header("🔎 Team Detail Viewer")
+selected_team = st.selectbox("Select a team to view picks", sorted(df['Team Name'].unique()), key="teamview")
+team_detail = df[df['Team Name'] == selected_team].sort_values('Tier')
 st.subheader(f"Picks and Scores for {selected_team}")
 st.table(team_detail[['Tier', 'Selection', 'Score']].reset_index(drop=True))
