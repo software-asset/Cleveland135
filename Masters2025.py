@@ -1,12 +1,11 @@
-from io import StringIO
 import streamlit as st
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from io import StringIO
 
 # Raw data input as a CSV string
-data = """
-Team Name,Selection,Tier
+data = """Team Name,Selection,Tier
 Team1,Rory McIlroy,Tier 1
 Team1,Jordan Spieth,Tier 2
 Team1,Wyndham Clark,Tier 3
@@ -114,47 +113,38 @@ Team9,Patrick Cantlay,Tier 2
 Team9,Dustin Johnson,Tier 3
 Team9,Jason Day,Tier 4
 Team9,Sahith Theegala,Tier 5
-Team9,Justin Rose,Tier 6
-"""
+Team9,Justin Rose,Tier 6"""
 
 # Prepare data
 df = pd.read_csv(StringIO(data))
 df['Team Name'] = df['Team Name'].str.strip().str.upper()
 
-st.title("🏌️ Golf Pool Dashboard")
-st.markdown("Explore team picks, popular players, and tier breakdowns.")
+st.title("🏌️ Golf Pool Simulator Dashboard")
+st.markdown("Simulate outcomes by assigning points to each player, and see how team standings would change.")
 
-# Sidebar: Team selector
-teams = sorted(df['Team Name'].unique())
-selected_team = st.sidebar.selectbox("Select a Team", teams)
+# Sidebar: Player scoring input
+st.sidebar.header("🧮 Player Scoring")
+unique_players = sorted(df['Selection'].unique())
+player_scores = {}
 
-# Team Picks Section
-st.header(f"Picks for {selected_team}")
-team_df = df[df['Team Name'] == selected_team].sort_values('Tier')
-st.table(team_df[['Tier', 'Selection']].reset_index(drop=True))
+for player in unique_players:
+    player_scores[player] = st.sidebar.number_input(f"{player}", min_value=0, max_value=100, value=0, step=1)
 
-# Most Picked Players
-st.header("Most Picked Players")
-popular_players = df['Selection'].value_counts().head(10)
-st.bar_chart(popular_players)
+# Apply scores to the main dataframe
+df['Score'] = df['Selection'].map(player_scores)
 
-# Tier Breakdown Chart
-st.header("Top Players per Tier")
-tier_counts = df.groupby(['Tier', 'Selection']).size().reset_index(name='Count')
-top_by_tier = tier_counts.groupby('Tier').apply(lambda g: g.sort_values('Count', ascending=False).head(3)).reset_index(drop=True)
+# Calculate team total scores
+team_scores = df.groupby('Team Name')['Score'].sum().reset_index()
+team_scores = team_scores.sort_values(by='Score', ascending=False).reset_index(drop=True)
+team_scores.index += 1  # start ranking from 1
 
-fig, ax = plt.subplots(figsize=(10, 6))
-sns.barplot(data=top_by_tier, x='Tier', y='Count', hue='Selection', ax=ax)
-ax.set_title("Top 3 Players per Tier")
-st.pyplot(fig)
+# Display leaderboard
+st.header("🏆 Simulated Team Leaderboard")
+st.table(team_scores.rename(columns={"Score": "Total Points"}))
 
-# Heatmap of Picks
-st.header("Heatmap: Player Picks by Tier")
-pivot = pd.pivot_table(df, index='Selection', columns='Tier', aggfunc='size', fill_value=0)
-fig2, ax2 = plt.subplots(figsize=(12, 14))
-sns.heatmap(pivot, cmap="RdYlGn_r", annot=True, fmt='d', linewidths=0.5, ax=ax2)
-ax2.set_title("Heatmap of Player Picks per Tier")
-st.pyplot(fig2)
+# Optionally: Show individual team picks and scores
+selected_team = st.selectbox("Select a team to view details", sorted(df['Team Name'].unique()))
+team_detail = df[df['Team Name'] == selected_team].sort_values('Tier')
 
-st.markdown("---")
-st.markdown("Made with effort for your golf pool. Want scoring added next? Just ask!")
+st.subheader(f"Picks and Scores for {selected_team}")
+st.table(team_detail[['Tier', 'Selection', 'Score']].reset_index(drop=True))
